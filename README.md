@@ -1,7 +1,7 @@
 ETHUSDT Order Book Bot
 
 1. 系統簡介 (System Overview)
-一套基於 Python AsyncIO 架構開發的 即時市場微結構 (Market Microstructure) 監控機器人。監控 Order Book的即時狀態，捕捉 ETHUSDT 的訂單簿失衡與流動性異常。
+基於 Python AsyncIO 架構開發。
 核心功能
 OBI 壓力監測 (Order Book Imbalance)：
 計算買賣雙方的掛單總量比例。
@@ -13,7 +13,7 @@ OBI 壓力監測 (Order Book Imbalance)：
 偵測單筆掛單數量超過設定值 (5000 ETH) 的異常訂單。
 用途：識別主力機構的護盤 (Buy Wall) 或壓盤 (Sell Wall) 意圖。
 Smart Alert：
-具備「優先級排序」的動態標題通知，確保手機第一眼看到最重要的資訊（如巨單 > 真空 > 一般趨勢）。
+具備「優先級排序」的動態標題通知，確保手機第一眼看到最重要的資訊
 ________________________________________
 2. 系統架構解析 (System Architecture)
 程式採用 ETL (Extract-Transform-Load) 微縮架構，並配合 滑動窗口 (Sliding Window) 進行訊號濾波。
