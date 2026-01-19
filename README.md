@@ -1,68 +1,84 @@
 ETHUSDT Order Book Bot
 
-1. 系統簡介 (System Overview)
-基於 Python AsyncIO 架構開發。
-核心功能
-OBI 壓力監測 (Order Book Imbalance)：
-計算買賣雙方的掛單總量比例。
-用途：判斷市場當下是「買方主導」還是「賣方主導」，作為價格短線爆發的領先指標。
-流動性真空偵測 (Liquidity Vacuum)：
-監控特定價格區間的掛單量是否顯著低於歷史平均。
-用途：當掛單稀薄時，少量的市價單即可造成價格劇烈滑價 (Slippage)。
-巨單監控 (Whale Watch)：
-偵測單筆掛單數量超過設定值 (5000 ETH) 的異常訂單。
-用途：識別主力機構的護盤 (Buy Wall) 或壓盤 (Sell Wall) 意圖。
-Smart Alert：
-具備「優先級排序」的動態標題通知，確保手機第一眼看到最重要的資訊
+1. System Overview  
+Built on Python AsyncIO architecture.  
+Core Features  
+- OBI Pressure Monitoring (Order Book Imbalance):  
+  Calculates the ratio of total buy and sell orders.  
+  Purpose: Determines whether the market is currently "buy-dominated" or "sell-dominated", serving as a leading indicator for short-term price breakouts.  
+- Liquidity Vacuum Detection:  
+  Monitors whether order volume in specific price ranges is significantly below historical averages.  
+  Purpose: When orders are thin, even small market orders can cause severe slippage.  
+- Whale Watch:  
+  Detects abnormal orders exceeding the set threshold (5000 ETH).  
+  Purpose: Identifies large players' intentions to support (Buy Wall) or suppress (Sell Wall) the price.  
+- Smart Alert:  
+  Features dynamic priority-based notification titles to ensure the most critical information is seen at a glance on mobile devices.  
 ________________________________________
-2. 系統架構解析 (System Architecture)
-程式採用 ETL (Extract-Transform-Load) 微縮架構，並配合 滑動窗口 (Sliding Window) 進行訊號濾波。
-A. 數據擷取層 (Data Ingestion)
-來源：Binance Spot API (/api/v3/depth)。
-頻率：每 10 秒一次 (由 CHECK_INTERVAL 控制)。
-深度：由 DEPTH_LIMIT = 100 控制，鎖定買賣雙方最前線的 100 檔掛單。
-B. 數據處理層 (Data Processing) - 演算法核心
-這是程式的「大腦」，由三個數學模型組成：
-1. OBI 模型 (Order Book Imbalance)
-公式：\mathrm{OBI}=總買量-總賣量總買量+總賣量
-區間：-1 (極度看空) 到 +1 (極度看多)。
-過濾機制：採用長度為 10 的 FIFO 佇列 (obi_window)。
-觸發邏輯：需在最近 10 次採樣中，有 7 次 超過閾值 0.33，才認定為有效趨勢。此設計有效消除了掛單閃爍 (Flickering) 的雜訊。
-2. 真空模型 (Vacuum Model)
-邏輯：將現價上方/下方劃分為 3 個 價格區間 (Bin)，每個區間寬度 100 USDT。
-比較基準：與該區間過去 50 次 (VACUUM_HISTORY_WINDOW) 的歷史移動平均量做比較。
-觸發條件：當前掛單量低於歷史均值的 70% (VACUUM_THRESHOLD = 0.7)，且 3 個區間同時 發生此狀況。
-3. 巨單模型 (Whale Model)
-邏輯：直接掃描前 100 檔掛單，篩選出 quantity > 5000.0 的超級大單。
-C. 決策與發送層 (Decision & Alerting)
-資安分離：透過 config.py 讀取 Token，實現程式碼與機密資料分離。
-動態標題 (Dynamic Priority)：
-最高優先：【🐋發現巨鯨】
-次要優先：【⚠️流動性真空】
-一般趨勢：【🔥強勢買壓/賣壓】
-中性過濾：若市場處於「中性 (Neutral)」狀態且無特殊事件，系統將自動靜音，避免無效干擾。
-冷卻機制：發送警報後強制冷卻 60 秒 (COOLDOWN_SEC)。
+
+2. System Architecture  
+The program adopts a lightweight ETL (Extract-Transform-Load) architecture with sliding window signal filtering.  
+
+A. Data Ingestion Layer  
+Source: Binance Spot API (/api/v3/depth).  
+Frequency: Every 10 seconds (controlled by CHECK_INTERVAL).  
+Depth: Limited to the top 100 levels on both sides (DEPTH_LIMIT = 100), focusing on frontline orders.  
+
+B. Data Processing Layer – Algorithm Core  
+This is the "brain" of the system, consisting of three mathematical models:  
+
+1. OBI Model (Order Book Imbalance)  
+   Formula: \mathrm{OBI} = \frac{Total Buy Volume - Total Sell Volume}{Total Buy Volume + Total Sell Volume}  
+   Range: -1 (extremely bearish) to +1 (extremely bullish).  
+   Filtering: Uses a FIFO queue of length 10 (obi_window).  
+   Trigger Logic: Requires at least 7 out of the last 10 samples to exceed the threshold of 0.33 for a valid trend. This effectively eliminates flickering noise from fleeting orders.  
+
+2. Vacuum Model  
+   Logic: Divides price ranges above/below the current price into 3 bins, each 100 USDT wide.  
+   Comparison: Against the moving average of the past 50 samples (VACUUM_HISTORY_WINDOW).  
+   Trigger Condition: Current volume below 70% of historical average (VACUUM_THRESHOLD = 0.7) in all 3 bins simultaneously.  
+
+3. Whale Model  
+   Logic: Scans the top 100 levels for orders with quantity > 5000.0.  
+
+C. Decision & Alerting Layer  
+Security: Token loaded from config.py for separation of code and secrets.  
+Dynamic Priority Titles:  
+Highest: 【 Whale Detected】  
+Secondary: 【Liquidity Vacuum】  
+Trend: 【Strong Buy/Sell Pressure】  
+Neutral Filtering: System auto-mutes in neutral conditions without special events to avoid noise.  
+Cooldown: 60-second mandatory cooldown after each alert (COOLDOWN_SEC).  
+
 ________________________________________
-3. 數據源與獲取機制詳解 (Data Source Deep Dive)
-本系統運作完全依賴於 Binance (幣安) 現貨公開市場數據，細節如下：
-1. 數據供應商
-名稱：Binance Spot API
-2. 獲取內容 (Payload)
-系統每次請求獲取 ETH/USDT 的訂單簿快照，包含核心陣列：
-Bids (買單陣列)：價格由高到低排序。例：[3300.50, 10.5] (在 3300.50 想買 10.5 顆)。
-Asks (賣單陣列)：價格由低到高排序。例：[3300.51, 5.0] (在 3300.51 想賣 5.0 顆)。
-3. 數據處理流程
-原始數據：接收 JSON 格式數據。
-清洗轉換：使用 pandas.DataFrame 將字串轉為浮點數 (float)。
-特徵工程：計算總量 sum() 導出 OBI，並進行巨單篩選。
+
+3. Data Source Deep Dive  
+The system relies entirely on Binance Spot public market data:  
+
+1. Data Provider  
+Name: Binance Spot API  
+
+2. Payload Content  
+Each request retrieves an ETH/USDT order book snapshot containing:  
+Bids (buy orders): Sorted high to low. Example: [3300.50, 10.5] (bid 10.5 ETH at 3300.50).  
+Asks (sell orders): Sorted low to high. Example: [3300.51, 5.0] (ask 5.0 ETH at 3300.51).  
+
+3. Data Processing Flow  
+Raw Data: JSON format.  
+Cleaning: Converted to pandas.DataFrame with float types.  
+Feature Engineering: Sum volumes to derive OBI and filter whale orders.  
+
 ________________________________________
-4. 參數設定與調整指南 (Configuration Guide)
-本版本參數已調整為 「極端行情捕捉模式」，旨在過濾掉 99% 的日常波動，僅針對重大事件發報。
-參數名稱	設定值	功能描述	調整影響
-PAIR	"ETHUSDT"	監控幣種	可改為 "BTCUSDT" 等。
-BIG_QTY	5000.0	巨單門檻	5000 ETH (約 1500 萬美金) 是核彈級設定，極難觸發，確保只抓超級主力。
-OBI_ALERT	0.33	壓力閾值	代表多空力量差距達 2 倍以上。
-WINDOW_SIZE	10	觀察窗口	觀察過去 10 次 (約 100 秒) 的數據。
-WINDOW_REQUIRED	7	達標次數	需 70% 時間維持異常才發報，大幅降低誤報率。
-VACUUM_THRESHOLD	0.7	真空係數	低於歷史均值 70% 即觸發。若需更敏感可調至 0.8 或 0.9。
-VACUUM_HISTORY	50	歷史長度	參考過去 50 次採樣 (約 500 秒) 的平均流動性。
+
+4. Configuration Guide  
+Current parameters are tuned for "extreme event capture mode", filtering out 99% of normal fluctuations to alert only on significant events.  
+
+Parameter | Value | Description | Adjustment Impact  
+--- | --- | --- | ---  
+PAIR | "ETHUSDT" | Monitored pair | Change to "BTCUSDT" etc.  
+BIG_QTY | 5000.0 | Whale threshold | 5000 ETH (~$15M) – nuclear-level, rarely triggered, ensures only super-whales.  
+OBI_ALERT | 0.33 | Pressure threshold | Represents ~2:1 imbalance.  
+WINDOW_SIZE | 10 | Observation window | Past 10 samples (~100 seconds).  
+WINDOW_REQUIRED | 7 | Required hits | 70% consistency to trigger, greatly reduces false positives.  
+VACUUM_THRESHOLD | 0.7 | Vacuum coefficient | Below 70% of historical average. Increase to 0.8-0.9 for higher sensitivity.  
+VACUUM_HISTORY | 50 | History length | References past 50 samples (~500 seconds) average liquidity.
